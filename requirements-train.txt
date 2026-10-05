@@ -1,0 +1,8 @@
+# Training our own models (training/): only on the training machine, never on the drone.
+# Installed by ./setup.sh --train. On Apple Silicon the normal PyPI wheel includes
+# the Apple GPU backend ("mps"); on an NVIDIA box pick the CUDA wheel from pytorch.org.
+# onnx / onnxscript: used by torch.onnx.export (the classic exporter is used, opset 12,
+# which cv2.dnn 4.10 reads).
+torch>=2.3
+onnx
+onnxscript

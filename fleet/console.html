@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fleet Ops</title>
+<style>
+:root{
+  --bg:#0a0d10; --panel:#0f1317; --panel-2:#141a1f; --raise:#1a2128;
+  --line:#1f272e; --line-2:#2b353e; --grid:#131a20; --grid-major:#18222a;
+  --text:#c3cad1; --bright:#e6ebef; --muted:#7c8791; --dim:#525d67;
+  --accent:#6ea5b5; --accent-dim:rgba(110,165,181,.14);
+  --ok:#72a07c; --warn:#c5a05a; --crit:#c2656c; --subject:#a58fd0;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:Inter,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.4 var(--sans);-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:4px}::-webkit-scrollbar-track{background:transparent}
+
+.app{display:grid;height:100vh;height:100dvh;grid-template-columns:280px minmax(0,1fr) 340px;
+  grid-template-rows:44px minmax(0,1fr) 190px;grid-template-areas:"top top top" "assets map detail" "assets log detail";gap:1px;background:var(--line)}
+.top{grid-area:top}.assets{grid-area:assets}.map{grid-area:map}.detail{grid-area:detail}.log{grid-area:log}
+.panel{background:var(--panel);display:flex;flex-direction:column;min-height:0;min-width:0}
+.ph{display:flex;align-items:center;gap:8px;height:30px;padding:0 12px;border-bottom:1px solid var(--line);flex:none}
+.label{font:600 10.5px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.ph .meta{margin-left:auto;font:10.5px var(--mono);color:var(--dim)}
+.scroll{overflow:auto;min-height:0;flex:1}
+.mono{font-family:var(--mono)}
+
+/* top bar */
+.top.panel{flex-direction:row;align-items:center;gap:18px;padding:0 14px}
+.brand{display:flex;align-items:center;gap:10px;font:600 12px var(--sans);letter-spacing:.2em;color:var(--bright)}
+.brand svg{flex:none}
+.sep{width:1px;height:18px;background:var(--line-2)}
+.counts{display:flex;gap:16px}
+.count{display:flex;align-items:baseline;gap:6px}
+.count b{font:600 14px var(--mono);color:var(--bright)}
+.count.alert b{color:var(--warn)}.count.lost b{color:var(--crit)}.count.nom b{color:var(--ok)}
+.spacer{flex:1}
+.linkstat{display:flex;align-items:center;gap:7px;font:10.5px var(--mono);color:var(--muted)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--dim)}
+.dot.up{background:var(--ok);box-shadow:0 0 0 3px rgba(114,160,124,.15)}
+.dot.down{background:var(--crit);box-shadow:0 0 0 3px rgba(194,101,108,.15)}
+.clock{font:12px var(--mono);color:var(--text);letter-spacing:.04em}
+
+/* assets */
+.asset{display:grid;grid-template-columns:3px 1fr auto;gap:0 10px;padding:9px 12px 9px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.asset:hover{background:var(--panel-2)}
+.asset.sel{background:var(--raise)}
+.asset .bar{grid-row:1/3;background:var(--dim)}
+.asset .id{font:600 12.5px var(--mono);color:var(--bright);letter-spacing:.02em}
+.asset .sub{grid-column:2/4;display:flex;align-items:center;gap:8px;font:11px var(--mono);color:var(--muted)}
+.batt{display:inline-flex;gap:1px;align-items:center}
+.batt i{width:4px;height:8px;background:var(--line-2)}
+.batt i.on{background:var(--muted)}
+.empty{padding:16px 14px;color:var(--muted);font-size:12px;line-height:1.55}
+.empty code{display:block;margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--line);font:11px/1.5 var(--mono);color:var(--text);word-break:break-all}
+
+.chip{display:inline-block;padding:1px 6px;border:1px solid currentColor;border-radius:2px;font:600 9.5px/1.5 var(--sans);letter-spacing:.12em;text-transform:uppercase}
+.c-ok{color:var(--ok);background:rgba(114,160,124,.08)}.c-warn{color:var(--warn);background:rgba(197,160,90,.08)}
+.c-crit{color:var(--crit);background:rgba(194,101,108,.08)}.c-acc{color:var(--accent);background:var(--accent-dim)}.c-dim{color:var(--muted)}
+
+/* map */
+.map{position:relative;background:var(--bg)}
+.map canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+.map canvas.drag{cursor:grabbing}
+.ov{position:absolute;pointer-events:none;font:10.5px var(--mono);color:var(--dim);letter-spacing:.06em}
+.ov.tl{top:10px;left:12px}.ov.br{bottom:10px;right:12px;text-align:right}
+.mapctl{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:4px}
+.mapctl button{width:30px;height:28px;padding:0}
+.corner{position:absolute;width:14px;height:14px;border-color:var(--line-2);border-style:solid;pointer-events:none}
+.corner.a{top:6px;left:6px;border-width:1px 0 0 1px}.corner.b{top:6px;right:6px;border-width:1px 1px 0 0}
+.corner.c{bottom:6px;left:6px;border-width:0 0 1px 1px}.corner.d{bottom:6px;right:6px;border-width:0 1px 1px 0}
+
+/* controls */
+.btn{height:30px;padding:0 10px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:2px;cursor:pointer;
+  font:600 10.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--text);transition:border-color .12s,background .12s}
+.btn:hover{border-color:var(--accent);color:var(--bright)}
+.btn:active{background:var(--accent-dim)}
+.btn.on{border-color:var(--accent);background:var(--accent-dim);color:var(--bright)}
+.btn.danger{color:var(--crit);border-color:rgba(194,101,108,.45)}
+.btn.danger:hover{border-color:var(--crit);background:rgba(194,101,108,.1)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.primary{border-color:var(--accent);color:var(--bright)}
+.field{height:30px;padding:0 8px;background:var(--bg);border:1px solid var(--line-2);border-radius:2px;font:12px var(--mono);color:var(--bright);width:100%;min-width:0}
+.field:focus{outline:none;border-color:var(--accent)}
+
+/* detail */
+.sect{padding:12px;border-bottom:1px solid var(--line)}
+.sect .label{display:block;margin-bottom:9px}
+.hero{display:flex;align-items:center;gap:10px;padding:14px 12px 12px}
+.hero .name{font:600 17px var(--mono);color:var(--bright);letter-spacing:.02em}
+.hero .age{margin-left:auto;font:11px var(--mono);color:var(--muted)}
+.kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.kv div{background:var(--panel);padding:6px 8px;min-width:0}
+.kv dt{font:600 9px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
+.kv dd{margin:0;font:12px var(--mono);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.row{display:flex;gap:4px;align-items:center}
+.row .field{flex:1}
+.hint{margin-top:7px;font:11px/1.5 var(--sans);color:var(--dim)}
+.drop{display:flex;align-items:center;gap:10px;padding:8px;border:1px dashed var(--line-2);border-radius:2px;cursor:pointer;min-height:54px}
+.drop:hover{border-color:var(--accent)}
+.drop img{width:38px;height:38px;object-fit:cover;border:1px solid var(--line-2);display:none}
+.drop span{font:11px var(--mono);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.state{margin-top:8px;font:11px/1.5 var(--mono);color:var(--muted)}
+.meter{height:3px;background:var(--line);margin-top:6px}
+.meter i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
+.nosel{padding:20px 14px;color:var(--dim);font-size:12px}
+
+/* log */
+.ev{display:grid;grid-template-columns:68px 110px 62px 1fr;gap:10px;padding:3px 12px;font:11px/1.5 var(--mono);border-bottom:1px solid rgba(31,39,46,.5)}
+.ev .t{color:var(--dim)}.ev .d{color:var(--text);overflow:hidden;text-overflow:ellipsis}.ev .x{color:var(--muted)}
+.k-sent{color:var(--accent)}.k-ack,.k-online{color:var(--ok)}.k-error{color:var(--crit)}.k-lost{color:var(--warn)}.k-removed{color:var(--dim)}
+
+/* token gate */
+.gate{position:fixed;inset:0;background:rgba(6,8,10,.92);display:none;align-items:center;justify-content:center;z-index:10}
+.gate.show{display:flex}
+.gate .box{width:min(360px,92vw);background:var(--panel);border:1px solid var(--line-2);padding:20px}
+.gate .box .label{display:block;margin-bottom:12px}
+
+@media (max-width:1100px){.app{grid-template-columns:240px minmax(0,1fr) 310px}}
+@media (max-width:860px){
+  .app{height:auto;min-height:100dvh;grid-template-columns:1fr;grid-template-rows:auto 56vh auto auto 220px;
+    grid-template-areas:"top" "map" "detail" "assets" "log"}
+  .top{flex-wrap:wrap;gap:8px 14px;padding:8px 12px}
+  .counts{gap:12px;order:3;width:100%}.sep,.spacer{display:none}.linkstat{margin-left:auto}
+  .assets .scroll,.detail .scroll{overflow:visible}
+  .ev{grid-template-columns:58px 80px 52px 1fr;gap:6px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top panel">
+    <div class="brand">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.5" fill="none" stroke="#6ea5b5" stroke-width="1"/><circle cx="9" cy="9" r="3.5" fill="none" stroke="#6ea5b5" stroke-width="1" opacity=".6"/><path d="M9 9 L9 1.5" stroke="#6ea5b5" stroke-width="1.2"/></svg>
+      FLEET&nbsp;OPS
+    </div>
+    <div class="sep"></div>
+    <div class="counts">
+      <div class="count"><span class="label">Assets</span><b id="n-all">0</b></div>
+      <div class="count nom"><span class="label">Nominal</span><b id="n-ok">0</b></div>
+      <div class="count alert"><span class="label">Alert</span><b id="n-alert">0</b></div>
+      <div class="count lost"><span class="label">Lost</span><b id="n-lost">0</b></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="linkstat"><span class="dot" id="link-dot"></span><span id="link-text">CONNECTING</span></div>
+    <div class="clock" id="clock">--:--:--Z</div>
+  </header>
+
+  <section class="assets panel">
+    <div class="ph"><span class="label">Assets</span><span class="meta" id="assets-meta"></span></div>
+    <div class="scroll" id="assets"></div>
+  </section>
+
+  <section class="map panel" id="mapwrap">
+    <canvas id="map"></canvas>
+    <div class="corner a"></div><div class="corner b"></div><div class="corner c"></div><div class="corner d"></div>
+    <div class="ov tl">TACTICAL&nbsp;·&nbsp;LOCAL&nbsp;ENU&nbsp;·&nbsp;ORIGIN&nbsp;HOME</div>
+    <div class="ov br" id="cursor">E&nbsp;—&nbsp;&nbsp;N&nbsp;—</div>
+    <div class="mapctl">
+      <button class="btn" id="zin" title="Zoom in">+</button>
+      <button class="btn" id="zout" title="Zoom out">−</button>
+      <button class="btn" id="fit" title="Fit all assets">⌖</button>
+    </div>
+  </section>
+
+  <section class="detail panel">
+    <div class="ph"><span class="label">Selected asset</span><span class="meta" id="pending"></span></div>
+    <div class="scroll">
+      <div class="nosel" id="nosel">Select an asset on the map or in the list.</div>
+      <div id="det" hidden>
+        <div class="hero"><span class="name" id="d-name"></span><span id="d-state"></span><span class="age" id="d-age"></span></div>
+        <div class="sect" style="padding-top:0">
+          <dl class="kv" style="margin:0">
+            <div><dt>Mode</dt><dd id="k-mode">—</dd></div>
+            <div><dt>Task</dt><dd id="k-task">—</dd></div>
+            <div><dt>Tracker</dt><dd id="k-tracker">—</dd></div>
+            <div><dt>Battery</dt><dd id="k-batt">—</dd></div>
+            <div><dt>Position E/N</dt><dd id="k-pos">—</dd></div>
+            <div><dt>Alt / Heading</dt><dd id="k-alt">—</dd></div>
+            <div><dt>Subject</dt><dd id="k-subj">—</dd></div>
+            <div><dt>Re-ID</dt><dd id="k-reid">—</dd></div>
+            <div><dt>Hover height</dt><dd id="k-hover">—</dd></div>
+            <div><dt>Map coverage</dt><dd id="k-map">—</dd></div>
+            <div><dt>Ceiling</dt><dd id="k-ceil">—</dd></div>
+            <div><dt>FC link</dt><dd id="k-link">—</dd></div>
+          </dl>
+        </div>
+        <div class="sect" id="launch-sect" hidden>
+          <span class="label">Launch <span id="l-state" class="mono" style="float:right;letter-spacing:0"></span></span>
+          <div class="state" id="l-info" style="margin-top:0">—</div>
+          <button class="btn primary" id="launch" style="width:100%;margin-top:6px">Launch</button>
+          <div class="hint">Arms and takes off to a hover. Refused, with the reason, if preflight fails (battery, link).</div>
+        </div>
+        <div class="sect">
+          <span class="label">Tasking</span>
+          <div class="grid3">
+            <button class="btn" data-task="FOLLOW">Follow</button>
+            <button class="btn" data-task="HOVER">Hover</button>
+            <button class="btn" data-task="PATROL">Patrol</button>
+            <button class="btn" data-task="HOLD">Hold</button>
+            <button class="btn danger" data-task="RETURN">Return</button>
+            <button class="btn danger" data-task="LAND">Land</button>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <input class="field" id="hover" type="number" step="0.05" min="0" placeholder="Hover height above subject, m">
+            <button class="btn" id="hover-set">Set</button>
+          </div>
+        </div>
+        <div class="sect">
+          <span class="label">Subject</span>
+          <label class="drop" id="drop"><img id="thumb" alt=""><span id="drop-text">Drop a photo, or tap to choose</span>
+            <input type="file" id="file" accept="image/*" hidden></label>
+          <div class="row" style="margin-top:6px">
+            <button class="btn primary" id="upload" style="flex:1" disabled>Send photo</button>
+            <button class="btn" id="clear" style="flex:1">Forget target</button>
+          </div>
+          <div class="hint">A clear, front-facing photo; full length also teaches body re-ID.</div>
+        </div>
+        <div class="sect">
+          <span class="label">Optics calibration</span>
+          <div class="row">
+            <input class="field" id="cal-d" type="number" step="0.1" min="0.5" max="10" value="2.0" style="max-width:80px">
+            <span class="mono" style="color:var(--muted);font-size:11px">m</span>
+            <button class="btn" id="cal" style="flex:1">Calibrate</button>
+          </div>
+          <div class="meter"><i id="cal-bar"></i></div>
+          <div class="state" id="cal-state">—</div>
+          <div class="hint">One time, on the ground. Send the subject photo first, then stand this far from the camera, facing it, until it reports done. Saved on the drone and reloaded every boot.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="log panel">
+    <div class="ph"><span class="label">Operator log</span><span class="meta" id="log-meta"></span></div>
+    <div class="scroll" id="log"></div>
+  </section>
+</div>
+
+<div class="gate" id="gate">
+  <form class="box" id="gate-form">
+    <span class="label">Access token required</span>
+    <input class="field" id="gate-token" placeholder="Paste the token printed by fleet.server" autocomplete="off">
+    <button class="btn primary" style="width:100%;margin-top:8px">Connect</button>
+  </form>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C = {};
+["--bg","--grid","--grid-major","--line","--line-2","--text","--bright","--muted","--dim","--accent","--ok","--warn","--crit","--subject"]
+  .forEach(n => C[n.slice(2)] = css(n));
+
+const params = new URLSearchParams(location.search);
+let TOKEN = params.get("token") || "";
+const S = {drones: [], sel: null, trails: {}, events: [], since: 0, link: "init",
+           view: {x: 0, y: 0, scale: 8, auto: true}, pendingFile: null};
+
+// ---------------------------------------------------------------- network
+async function api(method, path, body, type) {
+  const sep = path.includes("?") ? "&" : "?";
+  try {
+    const r = await fetch(path + sep + "token=" + encodeURIComponent(TOKEN),
+                          {method, body, headers: type ? {"Content-Type": type} : {}});
+    const text = await r.text();
+    let data = null; try { data = JSON.parse(text); } catch (e) {}
+    if (r.status === 401) showGate();
+    return {ok: r.ok, status: r.status, data, text};
+  } catch (e) {
+    return {ok: false, status: 0, data: null, text: String(e)};
+  }
+}
+function setLink(state) {
+  S.link = state;
+  $("link-dot").className = "dot " + (state === "up" ? "up" : state === "down" ? "down" : "");
+  $("link-text").textContent = state === "up" ? "LINK NOMINAL" : state === "down" ? "LINK DOWN" : "CONNECTING";
+}
+function showGate() { $("gate").classList.add("show"); $("gate-token").focus(); }
+$("gate-form").onsubmit = e => {
+  e.preventDefault();
+  TOKEN = $("gate-token").value.trim();
+  const u = new URL(location.href); u.searchParams.set("token", TOKEN); history.replaceState(null, "", u);
+  $("gate").classList.remove("show"); poll(); pollEvents();
+};
+
+async function poll() {
+  const r = await api("GET", "/fleet");
+  if (!r.ok || !Array.isArray(r.data)) { setLink(r.status === 401 ? "init" : "down"); return; }
+  setLink("up");
+  S.drones = r.data;
+  const now = performance.now();
+  for (const d of S.drones) {
+    const s = d.status, tr = S.trails[d.drone_id] || (S.trails[d.drone_id] = []);
+    const m = s.mission, seen = (S.alertSeen = S.alertSeen || {});
+    if (m && typeof m.alert_count === "number") {
+      const last = (m.alerts || []).slice(-1)[0];
+      if (seen[d.drone_id] !== undefined && m.alert_count > seen[d.drone_id] && last)
+        localEvent("alert", `${last.kind === "intrusion" ? "person" : last.detail + " " + last.kind.replace("object_", "")} in ${last.zone} at ${last.x} / ${last.y} m`, d.drone_id);
+      seen[d.drone_id] = m.alert_count;
+    }
+    if (typeof s.x !== "number" || typeof s.y !== "number") continue;
+    const last = tr[tr.length - 1];
+    if (!last || Math.hypot(last[0] - s.x, last[1] - s.y) > 0.25) tr.push([s.x, s.y, now]);
+    if (tr.length > 150) tr.shift();
+  }
+  if (!S.sel && S.drones.length) S.sel = S.drones[0].drone_id;
+  if (S.sel && !S.drones.find(d => d.drone_id === S.sel)) S.sel = S.drones.length ? S.drones[0].drone_id : null;
+  if (S.view.auto) fitView();
+  renderTop(); renderAssets(); renderDetail();
+}
+async function pollEvents() {
+  const r = await api("GET", "/events?since=" + S.since);
+  if (!r.ok || !r.data) return;
+  for (const e of r.data.events) { S.events.push(e); S.since = Math.max(S.since, e.seq); }
+  if (S.events.length > 250) S.events.splice(0, S.events.length - 250);
+  renderLog();
+}
+function localEvent(kind, text, drone) {
+  S.events.push({seq: 0, t: Date.now() / 1000, drone_id: drone || "console", kind, text});
+  renderLog();
+}
+
+// ---------------------------------------------------------------- state helpers
+function severity(d) {
+  if (d.stale) return "lost";
+  const s = d.status;
+  if (s.mode === "INVESTIGATE" || (s.mission && (s.mission.occupied || []).length)) return "alert";
+  if (["RETURN", "LAND"].includes(s.mode) || (typeof s.battery === "number" && s.battery < 30)) return "alert";
+  return "ok";
+}
+const SEV = {ok: ["c-ok", "Nominal", "ok"], alert: ["c-warn", "Alert", "warn"], lost: ["c-crit", "Lost", "crit"]};
+function modeChip(mode) {
+  const cls = ["RETURN", "LAND"].includes(mode) ? "c-warn" : mode === "TRACK" || mode === "HOVER" ? "c-acc"
+            : mode === "IDLE" ? "c-dim" : "c-dim";
+  return `<span class="chip ${cls}">${esc(mode || "—")}</span>`;
+}
+function battBars(b) {
+  if (typeof b !== "number") return `<span class="batt">${"<i></i>".repeat(5)}</span><span>—</span>`;
+  const on = Math.max(0, Math.min(5, Math.ceil(b / 20)));
+  return `<span class="batt">${Array.from({length: 5}, (_, i) => `<i class="${i < on ? "on" : ""}"></i>`).join("")}</span><span>${Math.round(b)}%</span>`;
+}
+const age = s => s < 60 ? `${s.toFixed(0)}s` : s < 3600 ? `${(s / 60).toFixed(0)}m` : `${(s / 3600).toFixed(1)}h`;
+const fmt = (v, d = 1) => typeof v === "number" && isFinite(v) ? v.toFixed(d) : "—";
+const selected = () => S.drones.find(d => d.drone_id === S.sel);
+
+// ---------------------------------------------------------------- rendering: panels
+function renderTop() {
+  const sev = S.drones.map(severity);
+  $("n-all").textContent = S.drones.length;
+  $("n-ok").textContent = sev.filter(s => s === "ok").length;
+  $("n-alert").textContent = sev.filter(s => s === "alert").length;
+  $("n-lost").textContent = sev.filter(s => s === "lost").length;
+}
+function renderAssets() {
+  const el = $("assets");
+  $("assets-meta").textContent = S.drones.length ? `${S.drones.length} tracked` : "";
+  if (!S.drones.length) {
+    el.innerHTML = `<div class="empty">No asset has reported yet. Start each drone with:
+      <code>python main.py --platform real … --fleet-url ${esc(location.origin)} --drone-id &lt;name&gt; --fleet-token ${esc(TOKEN || "&lt;token&gt;")}</code></div>`;
+    return;
+  }
+  el.innerHTML = S.drones.map(d => {
+    const s = d.status, sev = severity(d), [, , col] = SEV[sev];
+    return `<div class="asset ${d.drone_id === S.sel ? "sel" : ""}" data-id="${esc(d.drone_id)}">
+      <div class="bar" style="background:var(--${col})"></div>
+      <div class="id">${esc(d.drone_id.toUpperCase())}</div>
+      <div>${d.stale ? `<span class="chip c-crit">Lost</span>` : modeChip(s.mode)}</div>
+      <div class="sub">${esc(s.tracker || "—")} ${battBars(s.battery)} <span style="margin-left:auto">${age(d.age_s)}</span>
+        ${d.pending ? `<span class="chip c-acc">${d.pending}</span>` : ""}</div>
+    </div>`;
+  }).join("");
+  el.querySelectorAll(".asset").forEach(n => n.onclick = () => select(n.dataset.id));
+}
+function select(id) { S.sel = id; renderAssets(); renderDetail(); }
+
+function renderLaunch(L, stale) {
+  $("launch-sect").hidden = !L;
+  if (!L) return;
+  const flying = L.state === "launched";
+  $("l-state").textContent = flying ? "AIRBORNE" : L.state === "launching" ? "LAUNCHING" : L.ready ? "READY" : "NOT READY";
+  $("l-state").style.color = flying ? C.accent : L.ready ? C.ok : C.crit;
+  let info = flying ? "launched" : (L.problems.length ? L.problems.join(" · ") : "preflight OK") + (L.auto ? " · auto-launch" : "");
+  if (!flying && L.last_error) info += " · last: " + L.last_error;
+  $("l-info").textContent = info;
+  $("l-info").style.color = flying ? "" : L.problems.length ? C.crit : C.ok;
+  $("launch").disabled = flying || stale || L.state === "launching";
+}
+function renderDetail() {
+  const d = selected();
+  $("nosel").hidden = !!d; $("det").hidden = !d;
+  if (!d) { $("pending").textContent = ""; return; }
+  const s = d.status, sev = severity(d), [cls, word] = SEV[sev];
+  $("d-name").textContent = d.drone_id.toUpperCase();
+  $("d-state").innerHTML = `<span class="chip ${cls}">${word}</span>`;
+  $("d-age").textContent = `T+${age(d.age_s)}`;
+  $("pending").textContent = d.pending ? `${d.pending} PENDING` : "";
+  $("k-mode").innerHTML = modeChip(s.mode);
+  $("k-task").textContent = s.task || "—";
+  $("k-tracker").textContent = s.tracker || "—";
+  $("k-batt").textContent = typeof s.battery === "number" ? `${Math.round(s.battery)} %` : "unknown";
+  $("k-pos").textContent = `${fmt(s.x)} / ${fmt(s.y)} m`;
+  $("k-alt").textContent = `${fmt(s.z)} m · ${typeof s.yaw_deg === "number" ? String(Math.round((s.yaw_deg + 360) % 360)).padStart(3, "0") + "°" : "—"}`;
+  $("k-subj").textContent = s.target_enrolled ? (s.target_xy ? `${fmt(s.target_xy[0])} / ${fmt(s.target_xy[1])}` : "enrolled") : "none";
+  const r = s.reid || {};
+  $("k-reid").textContent = r.source ? `${r.source}${typeof r.best_sim === "number" ? " · " + r.best_sim.toFixed(2) : ""}` : (s.target_enrolled ? "idle" : "—");
+  $("k-hover").textContent = typeof s.hover_height_m === "number" ? `${s.hover_height_m.toFixed(2)} m` : "—";
+  $("k-map").textContent = typeof s.map_known === "number" ? `${(s.map_known * 100).toFixed(0)} %` : "—";
+  $("k-ceil").textContent = typeof s.ceiling_m === "number" ? `${fmt(s.ceiling_m, 0)} m` : "—";
+  $("k-link").textContent = s.link === undefined ? "—" : s.link ? "ok" : "NO HEARTBEAT";
+  renderLaunch(s.launch, d.stale);
+  document.querySelectorAll("[data-task]").forEach(b => b.classList.toggle("on", b.dataset.task === s.task));
+  const cal = s.calibration || {state: "idle"};
+  let text = "", pct = 0;
+  if (cal.state === "measuring") { pct = 100 * cal.samples / cal.needed; text = `MEASURING · ${cal.samples}/${cal.needed} frames at ${cal.distance_m} m — face the camera`; }
+  else if (cal.state === "done") { pct = 100; text = `DONE · HFOV ${cal.hfov_deg}° · aspect ${cal.aspect}${cal.save_error ? " · NOT SAVED: " + cal.save_error : " · saved"}`; }
+  else if (cal.state === "failed") { text = `FAILED · ${cal.reason}`; }
+  else { text = `IDLE · current HFOV ${fmt(s.hfov_deg)}°${s.calibrated ? " (calibrated)" : " (default — not calibrated)"}`; }
+  $("cal-state").textContent = text;
+  $("cal-state").style.color = cal.state === "failed" ? C.crit : cal.state === "done" ? C.ok : "";
+  $("cal-bar").style.width = pct + "%";
+}
+function renderLog() {
+  const el = $("log"), atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+  el.innerHTML = S.events.map(e => {
+    const t = new Date(e.t * 1000).toISOString().substr(11, 8) + "Z";
+    return `<div class="ev"><span class="t">${t}</span><span class="d">${esc((e.drone_id || "").toUpperCase())}</span>
+      <span class="k-${esc(e.kind)}">${esc(e.kind.toUpperCase())}</span><span class="x">${esc(e.text)}</span></div>`;
+  }).join("");
+  $("log-meta").textContent = `${S.events.length} events`;
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+
+// ---------------------------------------------------------------- tasking
+async function send(method, sub, body, type, what) {
+  const d = selected(); if (!d) return;
+  const r = await api(method, `/fleet/${encodeURIComponent(d.drone_id)}/${sub}`, body, type);
+  if (!r.ok) localEvent("error", `${what}: ${r.status || ""} ${r.text}`.trim(), d.drone_id);
+  pollEvents();
+  return r;
+}
+document.querySelectorAll("[data-task]").forEach(b =>
+  b.onclick = () => send("POST", "command", JSON.stringify({task: b.dataset.task}), "application/json", "task " + b.dataset.task));
+$("launch").onclick = () => {
+  const d = selected(); if (!d) return;
+  if (!confirm(`Arm and take off ${d.drone_id.toUpperCase()} now?`)) return;
+  send("POST", "command", JSON.stringify({launch: true}), "application/json", "launch");
+};
+$("hover-set").onclick = () => {
+  const v = parseFloat($("hover").value);
+  if (isNaN(v)) return localEvent("error", "enter a hover height first");
+  send("POST", "command", JSON.stringify({hover_height_m: v}), "application/json", "hover height");
+};
+$("cal").onclick = () => {
+  const v = parseFloat($("cal-d").value);
+  send("POST", "command", JSON.stringify({calibrate_distance_m: v}), "application/json", "calibrate");
+};
+$("clear").onclick = () => send("DELETE", "target", null, null, "forget target");
+function takeFile(f) {
+  if (!f) return;
+  S.pendingFile = f;
+  $("drop-text").textContent = `${f.name} · ${(f.size / 1e6).toFixed(1)} MB`;
+  const img = $("thumb"); img.src = URL.createObjectURL(f); img.style.display = "block";
+  $("upload").disabled = false;
+}
+$("file").onchange = e => takeFile(e.target.files[0]);
+$("drop").ondragover = e => { e.preventDefault(); $("drop").style.borderColor = C.accent; };
+$("drop").ondragleave = () => $("drop").style.borderColor = "";
+$("drop").ondrop = e => { e.preventDefault(); $("drop").style.borderColor = ""; takeFile(e.dataTransfer.files[0]); };
+$("upload").onclick = async () => {
+  if (!S.pendingFile) return;
+  $("upload").disabled = true;
+  const r = await send("POST", "target", S.pendingFile, S.pendingFile.type || "image/jpeg", "target photo");
+  if (r && r.ok) { $("drop-text").textContent = "Queued — waiting for the drone to confirm (see log)"; S.pendingFile = null; }
+  else $("upload").disabled = false;
+};
+
+// ---------------------------------------------------------------- tactical map
+const cv = $("map"), ctx = cv.getContext("2d");
+let W = 0, H = 0, DPR = 1;
+new ResizeObserver(() => {
+  const r = cv.getBoundingClientRect(); DPR = window.devicePixelRatio || 1;
+  W = r.width; H = r.height; cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  if (S.view.auto) fitView();
+}).observe($("mapwrap"));
+
+const toS = (x, y) => [W / 2 + (x - S.view.x) * S.view.scale, H / 2 - (y - S.view.y) * S.view.scale];
+const toW = (sx, sy) => [S.view.x + (sx - W / 2) / S.view.scale, S.view.y - (sy - H / 2) / S.view.scale];
+const nice = target => { const p = Math.pow(10, Math.floor(Math.log10(target))); for (const m of [1, 2, 5, 10]) if (m * p >= target) return m * p; return 10 * p; };
+
+function geofence() { const g = S.drones.map(d => d.status.geofence_m).filter(v => typeof v === "number"); return g.length ? Math.max(...g) : null; }
+function fitView() {
+  if (!W || !H) return;
+  let r = geofence() || 20;
+  for (const d of S.drones) {
+    const s = d.status;
+    if (typeof s.x === "number") r = Math.max(r, Math.hypot(s.x, s.y) + 4);
+    if (s.target_xy) r = Math.max(r, Math.hypot(...s.target_xy) + 4);
+  }
+  S.view.x = 0; S.view.y = 0; S.view.scale = Math.max(0.5, Math.min(60, (Math.min(W, H) / 2 - 28) / r));
+}
+function zoom(f, sx = W / 2, sy = H / 2) {
+  const [wx, wy] = toW(sx, sy);
+  S.view.scale = Math.max(0.3, Math.min(120, S.view.scale * f));
+  S.view.x = wx - (sx - W / 2) / S.view.scale; S.view.y = wy + (sy - H / 2) / S.view.scale;
+  S.view.auto = false;
+}
+$("zin").onclick = () => zoom(1.4); $("zout").onclick = () => zoom(1 / 1.4);
+$("fit").onclick = () => { S.view.auto = true; fitView(); };
+cv.addEventListener("wheel", e => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoom(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top); }, {passive: false});
+let drag = null;
+cv.addEventListener("pointerdown", e => { drag = {x: e.clientX, y: e.clientY, vx: S.view.x, vy: S.view.y, moved: false}; cv.setPointerCapture(e.pointerId); cv.classList.add("drag"); });
+cv.addEventListener("pointermove", e => {
+  const r = cv.getBoundingClientRect(), [wx, wy] = toW(e.clientX - r.left, e.clientY - r.top);
+  $("cursor").textContent = `E ${wx.toFixed(1)}  N ${wy.toFixed(1)}  ·  ${Math.hypot(wx, wy).toFixed(1)} M FROM HOME`;
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (Math.hypot(dx, dy) > 3) drag.moved = true;
+  if (drag.moved) { S.view.x = drag.vx - dx / S.view.scale; S.view.y = drag.vy + dy / S.view.scale; S.view.auto = false; }
+});
+cv.addEventListener("pointerup", e => {
+  cv.classList.remove("drag");
+  if (drag && !drag.moved) {                                   // a click: select the nearest asset
+    const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+    let best = null, bd = 22;
+    for (const d of S.drones) { if (typeof d.status.x !== "number") continue; const [sx, sy] = toS(d.status.x, d.status.y); const dd = Math.hypot(sx - px, sy - py); if (dd < bd) { bd = dd; best = d; } }
+    if (best) select(best.drone_id);
+  }
+  drag = null;
+});
+cv.addEventListener("dblclick", () => { S.view.auto = true; fitView(); });
+
+function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+function stateColor(d) { return C[SEV[severity(d)][2]]; }
+function text(t, x, y, color, size = 10.5, align = "left", weight = "") {
+  ctx.font = `${weight} ${size}px ${css("--mono")}`; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = "middle"; ctx.fillText(t, x, y);
+}
+
+function placeLabels(labels) {
+  const compact = W < 520, h = compact ? 18 : 30, placed = [];
+  ctx.font = `600 10.5px ${css("--mono")}`;
+  const hits = r => placed.some(o => r.x < o.x + o.w + 4 && o.x < r.x + r.w + 4 && r.y < o.y + o.h + 4 && o.y < r.y + r.h + 4);
+  for (const {d, px, py, col} of labels) {
+    const s = d.status, id = d.drone_id.toUpperCase();
+    const info = d.stale ? `LOST · T+${age(d.age_s)}` : `${s.mode || "—"} · ${typeof s.battery === "number" ? Math.round(s.battery) + "%" : "—"}`;
+    const l1 = compact ? `${id} · ${d.stale ? "LOST" : s.mode || "—"}` : id;
+    const w = Math.max(ctx.measureText(l1).width, compact ? 0 : ctx.measureText(info).width) + 12;
+    const spots = [[px + 20, py - h + 4], [px - 20 - w, py - h + 4], [px + 20, py + 8], [px - 20 - w, py + 8],
+                   [px - w / 2, py - h - 22], [px - w / 2, py + 22]]
+      .map(([x, y]) => ({x: Math.max(4, Math.min(W - w - 4, x)), y: Math.max(4, Math.min(H - h - 4, y)), w, h}));
+    const r = spots.find(c => !hits(c)) || spots[0];
+    placed.push(r);
+    ctx.fillStyle = rgba(C.bg, .88); ctx.fillRect(r.x, r.y, w, h);
+    ctx.strokeStyle = rgba(col, .5); ctx.strokeRect(r.x + .5, r.y + .5, w - 1, h - 1);
+    ctx.fillStyle = col; ctx.fillRect(r.x, r.y, 2, h);
+    text(l1, r.x + 7, r.y + 9, C.bright, 10.5, "left", "600");
+    if (!compact) text(info, r.x + 7, r.y + 21, C.muted, 9.5);
+  }
+}
+
+function draw(ts) {
+  requestAnimationFrame(draw);
+  if (!W || !H) return;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+  const sc = S.view.scale, [hx, hy] = toS(0, 0);
+
+  // grid
+  const step = nice(28 / sc), [x0, y1] = toW(0, 0), [x1, y0] = toW(W, H);
+  ctx.lineWidth = 1;
+  for (let gx = Math.floor(x0 / step) * step; gx <= x1; gx += step) {
+    const [sx] = toS(gx, 0); ctx.strokeStyle = Math.round(gx / step) % 5 === 0 ? C["grid-major"] : C.grid;
+    ctx.beginPath(); ctx.moveTo(Math.round(sx) + .5, 0); ctx.lineTo(Math.round(sx) + .5, H); ctx.stroke();
+  }
+  for (let gy = Math.floor(y0 / step) * step; gy <= y1; gy += step) {
+    const [, sy] = toS(0, gy); ctx.strokeStyle = Math.round(gy / step) % 5 === 0 ? C["grid-major"] : C.grid;
+    ctx.beginPath(); ctx.moveTo(0, Math.round(sy) + .5); ctx.lineTo(W, Math.round(sy) + .5); ctx.stroke();
+  }
+
+  // range rings + bearing bezel
+  const reach = Math.max(Math.hypot(hx, hy), Math.hypot(W - hx, hy), Math.hypot(hx, H - hy), Math.hypot(W - hx, H - hy));
+  const ring = nice(75 / sc);
+  let outer = 0;
+  for (let r = ring; r * sc < reach; r += ring) {
+    ctx.strokeStyle = rgba(C.accent, .16); ctx.beginPath(); ctx.arc(hx, hy, r * sc, 0, Math.PI * 2); ctx.stroke();
+    const a = -Math.PI / 4, lx = hx + Math.cos(a) * r * sc, ly = hy + Math.sin(a) * r * sc;
+    text(`${r} M`, lx + 4, ly - 6, C.dim, 9.5);
+    if (r * sc < Math.min(W, H) / 2 - 10) outer = r;
+  }
+  if (outer) {
+    const R = outer * sc;
+    for (let b = 0; b < 360; b += 5) {
+      const a = (b - 90) * Math.PI / 180, len = b % 30 === 0 ? 8 : 3;
+      ctx.strokeStyle = rgba(C.accent, b % 30 === 0 ? .4 : .2);
+      ctx.beginPath(); ctx.moveTo(hx + Math.cos(a) * R, hy + Math.sin(a) * R); ctx.lineTo(hx + Math.cos(a) * (R - len), hy + Math.sin(a) * (R - len)); ctx.stroke();
+      if (b % 90 === 0) text("NESW"[b / 90], hx + Math.cos(a) * (R + 11), hy + Math.sin(a) * (R + 11), C.muted, 10, "center", "600");
+      else if (b % 30 === 0) text(String(b).padStart(3, "0"), hx + Math.cos(a) * (R + 12), hy + Math.sin(a) * (R + 12), C.dim, 8.5, "center");
+    }
+  }
+
+  // sweep
+  const sweep = (ts / 4200) * Math.PI * 2 % (Math.PI * 2);
+  const sa = sweep - Math.PI / 2, scope = outer ? outer * sc : reach;
+  ctx.save(); ctx.beginPath(); ctx.arc(hx, hy, scope, 0, Math.PI * 2); ctx.clip();
+  for (let i = 0; i < 28; i++) {
+    const a0 = sa - (i + 1) * 0.025, a1 = sa - i * 0.025;
+    ctx.fillStyle = rgba(C.accent, 0.11 * (1 - i / 28));
+    ctx.beginPath(); ctx.moveTo(hx, hy); ctx.arc(hx, hy, reach, a0, a1); ctx.closePath(); ctx.fill();
+  }
+  ctx.strokeStyle = rgba(C.accent, .45); ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + Math.cos(sa) * reach, hy + Math.sin(sa) * reach); ctx.stroke();
+  ctx.restore();
+
+  // geofence
+  const gf = geofence();
+  if (gf) {
+    ctx.setLineDash([6, 5]); ctx.strokeStyle = rgba(C.warn, .55); ctx.beginPath(); ctx.arc(hx, hy, gf * sc, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    text(`GEOFENCE ${gf} M`, hx, hy - gf * sc - 9, rgba(C.warn, .8), 9.5, "center");
+  }
+
+  // home
+  ctx.strokeStyle = C.muted; ctx.beginPath();
+  ctx.moveTo(hx - 9, hy); ctx.lineTo(hx - 3, hy); ctx.moveTo(hx + 3, hy); ctx.lineTo(hx + 9, hy);
+  ctx.moveTo(hx, hy - 9); ctx.lineTo(hx, hy - 3); ctx.moveTo(hx, hy + 3); ctx.lineTo(hx, hy + 9); ctx.stroke();
+  ctx.strokeRect(hx - 3.5, hy - 3.5, 7, 7);
+  text("HOME", hx + 12, hy + 11, C.dim, 9.5);
+
+  // assets (labels are placed afterwards, all together, so they can avoid each other)
+  const labels = [];
+  for (const d of S.drones) {
+    const s = d.status; if (typeof s.x !== "number" || typeof s.y !== "number") continue;
+    const [px, py] = toS(s.x, s.y), col = stateColor(d), yaw = (s.yaw_deg || 0) * Math.PI / 180;
+    const dir = [Math.sin(yaw), -Math.cos(yaw)];
+
+    const tr = S.trails[d.drone_id] || [];                            // trail
+    for (let i = 1; i < tr.length; i++) {
+      const [ax, ay] = toS(tr[i - 1][0], tr[i - 1][1]), [bx, by] = toS(tr[i][0], tr[i][1]);
+      ctx.strokeStyle = rgba(col, .05 + .35 * i / tr.length); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    }
+    if (!d.stale && typeof s.hfov_deg === "number") {                // sensor cone
+      const half = s.hfov_deg / 2 * Math.PI / 180, R = Math.max(40, 6 * sc), base = yaw - Math.PI / 2;
+      const g = ctx.createRadialGradient(px, py, 0, px, py, R);
+      g.addColorStop(0, rgba(C.accent, .18)); g.addColorStop(1, rgba(C.accent, 0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(px, py); ctx.arc(px, py, R, base - half, base + half); ctx.closePath(); ctx.fill();
+    }
+    if (s.target_xy) {                                                // subject + track line
+      const [tx, ty] = toS(s.target_xy[0], s.target_xy[1]);
+      ctx.setLineDash([3, 4]); ctx.strokeStyle = rgba(C.subject, .6); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(tx, ty); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = rgba(C.subject, .2); ctx.strokeStyle = C.subject;
+      ctx.beginPath(); ctx.moveTo(tx, ty - 7); ctx.lineTo(tx + 7, ty); ctx.lineTo(tx, ty + 7); ctx.lineTo(tx - 7, ty); ctx.closePath(); ctx.fill(); ctx.stroke();
+      text("SUBJECT", tx - 22, ty, C.subject, 9, "right");
+    }
+    const bearing = Math.atan2(s.x, s.y), since = ((sweep - bearing) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+    if (since < 1.0 && !d.stale) {                                    // sweep blip
+      ctx.strokeStyle = rgba(col, .5 * (1 - since)); ctx.beginPath(); ctx.arc(px, py, 7 + since * 22, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.save(); ctx.translate(px, py); ctx.rotate(yaw);                // chevron
+    ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(7, 7); ctx.lineTo(0, 3); ctx.lineTo(-7, 7); ctx.closePath();
+    ctx.fillStyle = d.stale ? C.bg : rgba(col, .85); ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.stroke(); ctx.lineWidth = 1;
+    ctx.restore();
+
+    if (d.drone_id === S.sel) {                                       // selection brackets
+      ctx.strokeStyle = C.bright; const b = 16, l = 5;
+      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        ctx.beginPath(); ctx.moveTo(px + sx * b, py + sy * (b - l)); ctx.lineTo(px + sx * b, py + sy * b); ctx.lineTo(px + sx * (b - l), py + sy * b); ctx.stroke();
+      }
+    }
+    labels.push({d, px, py, col});
+  }
+  placeLabels(labels);
+
+  // scale bar
+  const sb = nice(90 / sc), sbw = sb * sc, bx = 14, by = H - 16;
+  ctx.strokeStyle = C.muted; ctx.beginPath(); ctx.moveTo(bx, by - 4); ctx.lineTo(bx, by); ctx.lineTo(bx + sbw, by); ctx.lineTo(bx + sbw, by - 4); ctx.stroke();
+  text(`${sb} M`, bx + sbw + 6, by - 2, C.muted, 9.5);
+
+  if (!S.drones.length) text("AWAITING TELEMETRY", W / 2, H / 2 + 40, C.dim, 11, "center", "600");
+}
+requestAnimationFrame(draw);
+
+// ---------------------------------------------------------------- clock + loops
+setInterval(() => $("clock").textContent = new Date().toISOString().substr(11, 8) + "Z", 500);
+if (!TOKEN) showGate(); else { poll(); pollEvents(); }
+setInterval(() => { if (TOKEN) poll(); }, 1000);
+setInterval(() => { if (TOKEN) pollEvents(); }, 1500);
+</script>
+</body>
+</html>

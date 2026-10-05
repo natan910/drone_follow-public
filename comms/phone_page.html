@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0d10">
+<title>Drone Link</title>
+<style>
+:root{
+  --bg:#0a0d10; --panel:#0f1317; --panel-2:#141a1f; --line:#1f272e; --line-2:#2b353e;
+  --text:#c3cad1; --bright:#e6ebef; --muted:#7c8791; --dim:#525d67;
+  --accent:#6ea5b5; --accent-dim:rgba(110,165,181,.14);
+  --ok:#72a07c; --warn:#c5a05a; --crit:#c2656c;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:Inter,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+.wrap{max-width:30rem;margin:0 auto;padding:0 0 calc(24px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(10,13,16,.94);
+  border-bottom:1px solid var(--line);backdrop-filter:blur(6px)}
+.brand{font:600 12px var(--sans);letter-spacing:.2em;color:var(--bright)}
+.scope{width:20px;height:20px;border:1px solid var(--accent);border-radius:50%;position:relative;flex:none}
+.scope::before{content:"";position:absolute;inset:5px;border:1px solid rgba(110,165,181,.5);border-radius:50%}
+.scope::after{content:"";position:absolute;left:50%;top:50%;width:1px;height:9px;background:var(--accent);transform-origin:0 0;animation:sweep 3s linear infinite}
+@keyframes sweep{from{transform:rotate(180deg)}to{transform:rotate(540deg)}}
+@media (prefers-reduced-motion:reduce){.scope::after{animation:none}}
+.right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--dim)}
+.dot.up{background:var(--ok);box-shadow:0 0 0 3px rgba(114,160,124,.15)}.dot.down{background:var(--crit)}
+.chip{display:inline-block;padding:1px 6px;border:1px solid currentColor;border-radius:2px;font:600 9.5px/1.5 var(--sans);letter-spacing:.12em;text-transform:uppercase}
+.c-ok{color:var(--ok)}.c-warn{color:var(--warn)}.c-crit{color:var(--crit)}.c-acc{color:var(--accent);background:var(--accent-dim)}.c-dim{color:var(--muted)}
+
+section{margin:14px 16px 0;background:var(--panel);border:1px solid var(--line)}
+.sh{display:flex;align-items:center;height:32px;padding:0 12px;border-bottom:1px solid var(--line)}
+.label{font:600 10.5px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.sh .meta{margin-left:auto;font:10.5px var(--mono);color:var(--dim)}
+.body{padding:12px}
+.kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line)}
+.kv div{background:var(--panel);padding:8px 12px;min-width:0}
+.kv dt{font:600 9px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
+.kv dd{margin:0;font:13px var(--mono);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+dl{margin:0}
+
+.btn{height:40px;padding:0 12px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:2px;cursor:pointer;
+  font:600 11px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--text);width:100%}
+.btn:active{background:var(--accent-dim);border-color:var(--accent)}
+.btn.on{border-color:var(--accent);background:var(--accent-dim);color:var(--bright)}
+.btn.primary{border-color:var(--accent);color:var(--bright)}
+.btn.danger{color:var(--crit);border-color:rgba(194,101,108,.45)}
+.btn:disabled{opacity:.35}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.row{display:flex;gap:6px;align-items:center}
+.field{height:40px;padding:0 10px;background:var(--bg);border:1px solid var(--line-2);border-radius:2px;font:14px var(--mono);color:var(--bright);width:100%;min-width:0}
+.field:focus{outline:none;border-color:var(--accent)}
+.drop{display:flex;align-items:center;gap:12px;padding:10px;border:1px dashed var(--line-2);cursor:pointer;min-height:64px}
+.drop img{width:44px;height:44px;object-fit:cover;border:1px solid var(--line-2);display:none}
+.drop span{font:12px var(--mono);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hint{margin-top:8px;font:12px/1.5 var(--sans);color:var(--dim)}
+.meter{height:3px;background:var(--line);margin-top:8px}.meter i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+.state{margin-top:8px;font:12px/1.5 var(--mono);color:var(--muted)}
+a.fleet{display:flex;align-items:center;justify-content:space-between;padding:12px;color:var(--bright);text-decoration:none;font:600 11px var(--sans);letter-spacing:.12em;text-transform:uppercase}
+a.fleet span{color:var(--accent);font:13px var(--mono);letter-spacing:0}
+#msg{font:12px/1.55 var(--mono);max-height:180px;overflow:auto}
+#msg div{display:grid;grid-template-columns:72px 1fr;gap:8px;padding:4px 12px;border-bottom:1px solid rgba(31,39,46,.6)}
+#msg .t{color:var(--dim)}#msg .ok{color:var(--ok)}#msg .err{color:var(--crit)}#msg .info{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="scope" aria-hidden="true"></div>
+    <div class="brand">DRONE&nbsp;LINK</div>
+    <div class="right"><span id="mode"></span><span class="dot" id="dot"></span></div>
+  </header>
+
+  <section>
+    <div class="sh"><span class="label">Status</span><span class="meta" id="updated">—</span></div>
+    <dl class="kv">
+      <div><dt>Task</dt><dd id="k-task">—</dd></div>
+      <div><dt>Tracker</dt><dd id="k-tracker">—</dd></div>
+      <div><dt>Battery</dt><dd id="k-batt">—</dd></div>
+      <div><dt>Subject</dt><dd id="k-subj">—</dd></div>
+      <div><dt>Re-ID</dt><dd id="k-reid">—</dd></div>
+      <div><dt>Position E/N</dt><dd id="k-pos">—</dd></div>
+      <div><dt>Height / ceiling</dt><dd id="k-alt">—</dd></div>
+      <div><dt>FC link</dt><dd id="k-link">—</dd></div>
+    </dl>
+  </section>
+
+  <section id="mission-sec" hidden>
+    <div class="sh"><span class="label">Perimeter</span><span class="meta" id="m-meta">—</span></div>
+    <div class="body"><div class="state" id="m-state" style="margin-top:0">—</div></div>
+  </section>
+
+  <section id="launch-sec" hidden>
+    <div class="sh"><span class="label">Launch</span><span class="meta" id="l-state">—</span></div>
+    <div class="body">
+      <div class="state" id="l-info" style="margin-top:0">—</div>
+      <button class="btn primary" id="launch" style="margin-top:8px" onclick="launch()">Launch</button>
+      <div class="hint">Arms and takes off to a hover. Area clear, pilot ready. Refused, with the reason, if preflight fails.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sh"><span class="label">Who should the drone look for?</span></div>
+    <div class="body">
+      <label class="drop"><img id="thumb" alt=""><span id="drop-text">Tap to choose a photo</span>
+        <input id="f" type="file" accept="image/*" hidden></label>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" onclick="send()">Send photo</button>
+        <button class="btn" onclick="clr()">Forget target</button>
+      </div>
+      <div class="hint">Clear and front-facing. Full length also teaches it what you look like from behind.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sh"><span class="label">Task</span></div>
+    <div class="body">
+      <div class="grid3">
+        <button class="btn" data-task="FOLLOW">Follow</button>
+        <button class="btn" data-task="HOVER">Hover</button>
+        <button class="btn" data-task="PATROL">Patrol</button>
+        <button class="btn" data-task="HOLD">Hold</button>
+        <button class="btn danger" data-task="RETURN">Return</button>
+        <button class="btn danger" data-task="LAND">Land now</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="h" class="field" type="number" step="0.05" min="0" placeholder="Hover height, m (0.30)">
+        <button class="btn" style="width:88px" onclick="height()">Set</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sh"><span class="label">Optics calibration</span><span class="meta" id="fov">—</span></div>
+    <div class="body">
+      <div class="row">
+        <input id="cd" class="field" type="number" step="0.1" min="0.5" max="10" value="2.0" style="width:90px;flex:none">
+        <span style="font:12px var(--mono);color:var(--muted)">m</span>
+        <button class="btn" onclick="calibrate()">Calibrate</button>
+      </div>
+      <div class="meter"><i id="cbar"></i></div>
+      <div class="state" id="cstate">—</div>
+      <div class="hint">Once, on the ground: send your photo first, then stand this far from the camera, facing it, until it says done.</div>
+    </div>
+  </section>
+
+  <section id="fleet-sec" hidden>
+    <a class="fleet" id="fleet" href="#">Fleet console <span>open ↗</span></a>
+  </section>
+
+  <section>
+    <div class="sh"><span class="label">Log</span></div>
+    <div id="msg"></div>
+  </section>
+</div>
+
+<script>
+"use strict";
+const q = (() => {
+  const fromUrl = new URLSearchParams(location.search).get("token");
+  let t = fromUrl;
+  try { if (fromUrl) localStorage.setItem("drone_token", fromUrl); else t = localStorage.getItem("drone_token"); } catch (e) {}
+  if (!t) { t = prompt("Drone token (the --token you started it with)") || ""; try { localStorage.setItem("drone_token", t); } catch (e) {} }
+  return t;
+})();
+const $ = id => document.getElementById(id);
+function say(text, kind = "info") {
+  const row = document.createElement("div"), t = document.createElement("span"), x = document.createElement("span");
+  t.className = "t"; t.textContent = new Date().toTimeString().slice(0, 8);
+  x.className = kind; x.textContent = text;
+  row.append(t, x); $("msg").prepend(row);
+  while ($("msg").children.length > 40) $("msg").lastChild.remove();
+}
+async function call(m, path, body, type) {
+  try {
+    const r = await fetch(path + "?token=" + encodeURIComponent(q), {method: m, body, headers: type ? {"Content-Type": type} : {}});
+    const text = await r.text();
+    return {ok: r.ok, status: r.status, text};
+  } catch (e) { return {ok: false, status: 0, text: "could not reach the drone: " + e}; }
+}
+async function act(m, path, body, type, label) {
+  const r = await call(m, path, body, type);
+  say(`${label}: ${r.ok ? "ok" : r.status + " " + r.text}`, r.ok ? "ok" : "err");
+  status();
+  return r;
+}
+$("f").onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  $("drop-text").textContent = `${f.name} · ${(f.size / 1e6).toFixed(1)} MB`;
+  $("thumb").src = URL.createObjectURL(f); $("thumb").style.display = "block";
+};
+async function send() {
+  const f = $("f").files[0];
+  if (!f) return say("pick a photo first", "err");
+  say("sending photo…");
+  const r = await act("POST", "/target", f, f.type || "image/jpeg", "photo");
+  if (r.ok) { try { const d = JSON.parse(r.text); say(`target locked · ${d.faces_in_photo} face(s) in photo` + (d.body_looks !== undefined ? ` · body looks ${d.body_looks}` : ""), "ok"); } catch (e) {} }
+}
+function clr() { act("DELETE", "/target", null, null, "forget target"); }
+function launch() {
+  if (!confirm("Arm and take off now?")) return;
+  act("POST", "/command", JSON.stringify({launch: true}), "application/json", "launch");
+}
+document.querySelectorAll("[data-task]").forEach(b =>
+  b.onclick = () => act("POST", "/command", JSON.stringify({task: b.dataset.task}), "application/json", "task " + b.dataset.task));
+function height() {
+  const v = parseFloat($("h").value);
+  if (isNaN(v)) return say("enter a height first", "err");
+  act("POST", "/command", JSON.stringify({hover_height_m: v}), "application/json", "hover height");
+}
+function calibrate() {
+  act("POST", "/command", JSON.stringify({calibrate_distance_m: parseFloat($("cd").value)}), "application/json", "calibrate");
+}
+const fmt = (v, d = 1) => typeof v === "number" && isFinite(v) ? v.toFixed(d) : "—";
+function renderLaunch(L) {
+  $("launch-sec").hidden = !L;
+  if (!L) return;
+  const flying = L.state === "launched";
+  $("l-state").textContent = flying ? "AIRBORNE" : L.state === "launching" ? "LAUNCHING" : L.ready ? "READY" : "NOT READY";
+  $("l-state").style.color = flying ? "var(--accent)" : L.ready ? "var(--ok)" : "var(--crit)";
+  let info = flying ? "launched" : (L.problems.length ? L.problems.join(" · ") : "preflight OK") + (L.auto ? " · auto-launch" : "");
+  if (!flying && L.last_error) info += " · last: " + L.last_error;
+  $("l-info").textContent = info;
+  $("l-info").style.color = flying ? "" : L.problems.length ? "var(--crit)" : "var(--ok)";
+  $("launch").disabled = flying || L.state === "launching";
+}
+let lastAlertCount = null;
+function renderMission(m) {
+  $("mission-sec").hidden = !m;
+  if (!m) return;
+  if (m.failed) { $("m-meta").textContent = m.mission; $("m-state").textContent = "OFF · " + m.failed; $("m-state").style.color = "var(--crit)"; return; }
+  if (m.mission !== "perimeter") { $("m-meta").textContent = m.mission; $("m-state").textContent = "—"; return; }
+  $("m-meta").textContent = `${m.zones} zone(s)${m.property ? " · property" : ""} · ${m.alert_count} alert(s)`;
+  const last = (m.alerts || []).slice(-1)[0], occ = m.occupied || [], inv = m.investigating;
+  let text = `${occ.length ? "OCCUPIED: " + occ.join(", ") : "clear"} · ${(m.tracks || []).length} tracked`;
+  if (inv) text += ` · LOOKING AT ${inv.track || inv.sensor || "?"}${inv.zone ? " (" + inv.zone + ")" : ""}`;
+  if (last) text += ` · last: ${last.kind === "intrusion" ? "person" : last.detail + " " + last.kind.replace("object_", "")} @ ${last.zone} ${new Date(last.wall_time * 1000).toTimeString().slice(0, 8)}`;
+  if (m.baseline) text += ` · learned ${m.baseline.learned}/${m.baseline.places} views`;
+  if (m.detector && typeof m.detector.avg_ms === "number") text += ` · detector ${m.detector.avg_ms} ms`;
+  if (m.notify) text += ` · push ${m.notify.sent} ok${m.notify.failed ? " / " + m.notify.failed + " failed" : ""}`;
+  $("m-state").textContent = text;
+  $("m-state").style.color = occ.length || inv ? "var(--crit)" : "";
+  if (lastAlertCount !== null && m.alert_count > lastAlertCount && last) {
+    say(`ALERT: ${last.kind === "intrusion" ? "person" : last.detail + " " + last.kind.replace("object_", "")} in ${last.zone} (${last.x} / ${last.y} m)`, "err");
+    if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+  }
+  lastAlertCount = m.alert_count;
+}
+async function status() {
+  const r = await call("GET", "/status");
+  $("dot").className = "dot " + (r.ok ? "up" : "down");
+  if (!r.ok) { $("updated").textContent = r.status === 401 ? "WRONG TOKEN" : "NO LINK"; return; }
+  let s; try { s = JSON.parse(r.text); } catch (e) { return; }
+  $("updated").textContent = new Date().toTimeString().slice(0, 8);
+  const mode = s.mode || "—", cls = ["RETURN", "LAND"].includes(mode) ? "c-warn" : ["TRACK", "HOVER"].includes(mode) ? "c-acc" : "c-dim";
+  $("mode").innerHTML = ""; const chip = document.createElement("span"); chip.className = "chip " + cls; chip.textContent = mode; $("mode").append(chip);
+  $("k-task").textContent = s.task || "—";
+  $("k-tracker").textContent = s.tracker || "—";
+  $("k-batt").textContent = typeof s.battery === "number" ? Math.round(s.battery) + " %" : "unknown";
+  $("k-subj").textContent = s.target_enrolled ? "enrolled" : "none";
+  const reid = s.reid || {};
+  $("k-reid").textContent = reid.source ? reid.source + (typeof reid.best_sim === "number" ? " · " + reid.best_sim.toFixed(2) : "") : "—";
+  $("k-pos").textContent = `${fmt(s.x)} / ${fmt(s.y)}`;
+  $("k-alt").textContent = `${fmt(s.z)} / ${fmt(s.ceiling_m, 0)} m`;
+  $("k-link").textContent = s.link === undefined ? "—" : s.link ? "ok" : "NO HEARTBEAT";
+  renderLaunch(s.launch);
+  renderMission(s.mission);
+  document.querySelectorAll("[data-task]").forEach(b => b.classList.toggle("on", b.dataset.task === s.task));
+  $("fov").textContent = `HFOV ${fmt(s.hfov_deg)}°${s.calibrated ? "" : " · default"}`;
+  const c = s.calibration || {state: "idle"};
+  let text = "IDLE", pct = 0;
+  if (c.state === "measuring") { pct = 100 * c.samples / c.needed; text = `MEASURING · ${c.samples}/${c.needed} at ${c.distance_m} m — face the camera`; }
+  else if (c.state === "done") { pct = 100; text = `DONE · HFOV ${c.hfov_deg}°` + (c.save_error ? ` · NOT SAVED: ${c.save_error}` : " · saved"); }
+  else if (c.state === "failed") text = "FAILED · " + c.reason;
+  $("cstate").textContent = text; $("cstate").style.color = c.state === "failed" ? "var(--crit)" : c.state === "done" ? "var(--ok)" : "";
+  $("cbar").style.width = pct + "%";
+  if (s.fleet_console) { $("fleet-sec").hidden = false; $("fleet").href = s.fleet_console; }
+}
+say("Choose a clear, front-facing photo of one person.");
+status(); setInterval(status, 2000);
+</script>
+</body>
+</html>

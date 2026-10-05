@@ -1,0 +1,9 @@
+# Everything in requirements-core.txt, plus the optional heavier pieces:
+# the insightface face-matching backend, the MAVLink flight-controller driver,
+# and the TF-Luna range sensor reader over serial. Install with:
+#   pip install -r requirements-full.txt
+-r requirements-core.txt
+insightface
+onnxruntime
+pymavlink
+pyserial

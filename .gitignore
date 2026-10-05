@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+.DS_Store
+target.jpg
+models/
+*.npz
+*.jsonl
+camera_calibration.json
+ardupilot/
+datasets/
+exports/
+runs/
+eval_results/
+CLAUDE.md
+HANDOFF.md
+mailmap.txt

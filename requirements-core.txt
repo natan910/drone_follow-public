@@ -1,0 +1,13 @@
+# The minimum drone_follow actually needs to import and pass its test suite.
+# insightface/onnxruntime/pymavlink/pyserial are all imported lazily inside the
+# functions that need them (see requirements-full.txt), so they're not required
+# just to run the code or the tests -- keeping this list short keeps Docker
+# builds and CI runs fast and avoids the platform-specific wheel headaches
+# those heavier packages can bring.
+#
+# Pinned below 5.0: opencv-python 5.0.x shipped without cv2.HOGDescriptor in
+# its Python bindings (a real upstream gap, not a local misconfiguration),
+# which breaks perception/person_detector.py's HOG fallback and several tests
+# that exercise it directly.
+numpy
+opencv-python-headless<5

@@ -1,0 +1,69 @@
+name: tests
+
+# Runs the unit + closed-loop-simulation suite on every push and PR, against
+# only requirements-core.txt (numpy + opencv-python-headless<5) -- the same
+# minimal set the Docker image installs, and all any of these tests actually
+# need (insightface/onnxruntime/pymavlink/pyserial are imported lazily by the
+# code paths that use real hardware/models, which CI never exercises).
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: requirements-core.txt
+
+      - name: Install dependencies
+        run: pip install --only-binary=":all:" -r requirements-core.txt
+
+      - name: Confirm HOGDescriptor is present
+        # opencv-python 5.0.x shipped without it in its Python bindings; this
+        # fails fast with a clear message instead of a confusing test error
+        # if a future opencv-python release regresses the same way.
+        run: python -c "import cv2; cv2.HOGDescriptor"
+
+      - name: Run test suite
+        # A hung test is dumped (every thread's stack + the test that was running) to hang.txt after
+        # 10 min, and the next step turns that into an annotation on the run page.
+        timeout-minutes: 15
+        run: |
+          python - <<'EOF'
+          import faulthandler, sys, unittest
+          dump = open("hang.txt", "w")
+          faulthandler.dump_traceback_later(600, exit=True, file=dump)
+          class Result(unittest.TextTestResult):
+              def startTest(self, test):
+                  dump.seek(0); dump.truncate(); dump.write(f"running: {test.id()}\n"); dump.flush()
+                  super().startTest(test)
+          suite = unittest.defaultTestLoader.discover("tests", top_level_dir=".")
+          ok = unittest.TextTestRunner(verbosity=2, resultclass=Result).run(suite).wasSuccessful()
+          faulthandler.cancel_dump_traceback_later()
+          open("hang.txt", "w").close()
+          sys.exit(0 if ok else 1)
+          EOF
+
+      - name: Report a hang
+        if: failure()
+        run: |
+          python - <<'EOF'
+          t = open("hang.txt").read() if __import__("os").path.exists("hang.txt") else ""
+          if "Thread" in t or "File" in t:
+              print("::error title=test hang::" + t[-6000:].replace("%", "%25").replace("\r", "").replace("\n", "%0A"))
+          EOF

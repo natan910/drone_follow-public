@@ -1,0 +1,19 @@
+{
+  "name": "drone_follow",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": "..",
+    "args": { "EXTRAS": "full" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python"],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python3",
+        "python.testing.unittestEnabled": true,
+        "python.testing.unittestArgs": ["-s", "tests", "-t", "."]
+      }
+    }
+  },
+  "postCreateCommand": "python -m unittest discover -s tests -t . -q"
+}

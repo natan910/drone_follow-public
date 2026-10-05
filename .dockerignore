@@ -1,0 +1,12 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+models/
+*.npz
+*.jsonl
+target.jpg
+ardupilot/
+.pytest_cache
+camera_calibration.json

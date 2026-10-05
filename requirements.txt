@@ -1,0 +1,14 @@
+# Prefer `./setup.sh` (or `make setup` / `make setup-full`) over installing this
+# file directly: it pins opencv-python below 5.0 (5.0's Python wheel shipped
+# without cv2.HOGDescriptor -- see requirements-core.txt) and installs
+# wheel-only, which this file does not. requirements-core.txt / requirements-full.txt
+# are what setup.sh, the Dockerfile and CI all actually install.
+#
+# Laptop (sim, webcam dry run). On the Pi, ./setup.sh builds the venv from the system Python with
+# --system-site-packages so apt's picamera2 is visible (sudo apt install -y python3-picamera2).
+numpy
+opencv-python<5
+insightface      # only for --backend insightface
+onnxruntime      # only for --backend insightface
+pymavlink        # only for --driver mavlink
+pyserial         # only for --ranger

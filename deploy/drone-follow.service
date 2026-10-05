@@ -1,0 +1,53 @@
+# systemd unit: start drone_follow automatically on boot (Raspberry Pi).
+#
+# Install:
+#   sudo cp deploy/drone-follow.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now drone-follow
+#
+# Watch it:
+#   systemctl status drone-follow
+#   journalctl -u drone-follow -f
+#
+# Edit the WorkingDirectory, User, ExecStartPre/ExecStart paths below to match
+# where you actually cloned the repo and created the venv -- /home/pi/drone_follow
+# and user "pi" are just the common case, not a requirement.
+#
+# ExecStartPre runs the preflight check first: if a model file is missing, the
+# camera won't open, or a range sensor/MAVLink link isn't talking, the service
+# fails fast with a clear reason in the journal instead of taking off half-blind.
+# --skip-camera is here because tools/preflight_check.py's own camera open/close
+# would otherwise race with main.py's for the same device a few seconds later;
+# main.py fails loudly on its own if the camera can't open. Drop --skip-camera
+# if you'd rather catch that at preflight time too.
+
+[Unit]
+Description=drone_follow: autonomous person-following drone
+After=network.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/drone_follow
+ExecStartPre=/home/pi/drone_follow/.venv/bin/python3 tools/preflight_check.py \
+    --driver mavlink --mavlink /dev/serial0 \
+    --ranger "0:/dev/ttyUSB0,-45:/dev/ttyUSB1,45:/dev/ttyUSB2" \
+    --camera pi --skip-camera
+ExecStart=/home/pi/drone_follow/.venv/bin/python3 main.py \
+    --platform real --camera pi --driver mavlink --backend opencv \
+    --ranger "0:/dev/ttyUSB0,-45:/dev/ttyUSB1,45:/dev/ttyUSB2" \
+    --phone --map /home/pi/drone_follow/area.npz \
+    --log /home/pi/drone_follow/flight-%h.jsonl
+Restart=on-failure
+RestartSec=5
+
+# The autopilot must always be able to land/return on its own if this
+# process dies mid-flight -- see safety/supervisor.py -- but do not let
+# systemd silently respawn straight back into the air after a crash loop
+# (StartLimitBurst above stops that; check `systemctl status` before
+# re-enabling if it trips).
+
+[Install]
+WantedBy=multi-user.target
